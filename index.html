@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My App Launcher</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/codemirror.min.css">
   <style>
     :root {
       --primary: #6C63FF;
@@ -231,7 +232,7 @@
       background: var(--card-bg);
       border-radius: 24px;
       width: 100%;
-      max-width: 400px;
+      max-width: 600px;
       padding: 24px;
       position: relative;
       transform: scale(0.9);
@@ -420,9 +421,30 @@
       color: var(--text-primary);
     }
 
+    .CodeMirror {
+      height: 300px;
+      border-radius: 12px;
+      border: 1px solid var(--search-bg);
+      margin-bottom: 16px;
+    }
+
+    .iframe-container {
+      width: 100%;
+      height: 400px;
+      border-radius: 12px;
+      border: 1px solid var(--search-bg);
+      background: white;
+      margin-top: 16px;
+      overflow: hidden;
+    }
+
     @media (max-width: 600px) {
       .app-grid {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      }
+
+      .modal-content {
+        max-width: 90%;
       }
     }
   </style>
@@ -472,10 +494,14 @@
           <span class="detail-value" id="detailTech">HTML, CSS, JS</span>
         </div>
       </div>
+      <button class="btn btn-outline" id="editCodeBtn" style="margin-bottom: 12px;">Edit Code</button>
       <button class="launch-btn" id="launchBtn">
         <span>Launch App</span>
         <span>🚀</span>
       </button>
+      <div class="iframe-container" id="appPreview" style="display: none;">
+        <iframe id="appIframe" sandbox="allow-scripts" style="width: 100%; height: 100%; border: none;"></iframe>
+      </div>
     </div>
   </div>
 
@@ -507,7 +533,7 @@
       </div>
       
       <div class="form-group">
-        <label class="form-label">URL</label>
+        <label class="form-label">URL (optional)</label>
         <input type="text" class="form-input" id="appUrlInput" placeholder="https:// or relative path">
       </div>
       
@@ -527,6 +553,23 @@
     </div>
   </div>
 
+  <!-- Code Editor Modal -->
+  <div class="modal" id="codeModal">
+    <div class="modal-content">
+      <button class="close-btn" id="closeCodeModal">✕</button>
+      <div class="modal-icon">💻</div>
+      <h2 class="modal-title">Code Editor</h2>
+      <textarea id="codeEditor"></textarea>
+      <div style="display: flex; gap: 12px; margin-top: 16px;">
+        <button class="launch-btn" id="saveCodeBtn">
+          <span>Save Code</span>
+          <span>💾</span>
+        </button>
+        <button class="btn btn-outline" id="runCodeBtn">Run Code ▶️</button>
+      </div>
+    </div>
+  </div>
+
   <nav class="bottom-nav">
     <button class="nav-btn active" data-section="home">
       <span class="nav-icon">🏠</span>
@@ -542,6 +585,11 @@
     </button>
   </nav>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/mode/xml/xml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/mode/css/css.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/mode/htmlmixed/htmlmixed.min.js"></script>
   <script type="module">
     // Firebase Configuration
     const firebaseConfig = {
@@ -589,7 +637,7 @@
     const themeToggle = document.getElementById('themeToggle');
     const searchInput = document.getElementById('searchInput');
     
-    // Modals
+    // App Modal
     const appModal = document.getElementById('appModal');
     const closeModal = document.getElementById('closeModal');
     const modalIcon = document.getElementById('modalIcon');
@@ -599,7 +647,11 @@
     const detailCreated = document.getElementById('detailCreated');
     const detailTech = document.getElementById('detailTech');
     const launchBtn = document.getElementById('launchBtn');
+    const editCodeBtn = document.getElementById('editCodeBtn');
+    const appPreview = document.getElementById('appPreview');
+    const appIframe = document.getElementById('appIframe');
     
+    // Edit Modal
     const editModal = document.getElementById('editModal');
     const closeEditModal = document.getElementById('closeEditModal');
     const appNameInput = document.getElementById('appNameInput');
@@ -612,6 +664,13 @@
     const deleteAppBtn = document.getElementById('deleteAppBtn');
     const addAppBtn = document.getElementById('addAppBtn');
     
+    // Code Modal
+    const codeModal = document.getElementById('codeModal');
+    const closeCodeModal = document.getElementById('closeCodeModal');
+    const codeEditorElement = document.getElementById('codeEditor');
+    const saveCodeBtn = document.getElementById('saveCodeBtn');
+    const runCodeBtn = document.getElementById('runCodeBtn');
+    
     const navBtns = document.querySelectorAll('.nav-btn');
 
     // State
@@ -619,9 +678,23 @@
     let userApps = [];
     let darkMode = false;
     let currentEditingApp = null;
+    let codeEditor = null;
+
+    // Initialize CodeMirror
+    function initCodeEditor() {
+      codeEditor = CodeMirror.fromTextArea(codeEditorElement, {
+        mode: 'htmlmixed',
+        theme: darkMode ? 'monokai' : 'default',
+        lineNumbers: true,
+        tabSize: 2,
+        indentWithTabs: false,
+        lineWrapping: true
+      });
+    }
 
     // Initialize
     initTheme();
+    initCodeEditor();
     setupEventListeners();
 
     // Theme Management
@@ -634,6 +707,9 @@
       darkMode = !darkMode;
       localStorage.setItem('darkMode', darkMode);
       updateTheme();
+      if (codeEditor) {
+        codeEditor.setOption('theme', darkMode ? 'monokai' : 'default');
+      }
     }
 
     function updateTheme() {
@@ -684,13 +760,11 @@
     function loadUserApps(userId) {
       const userDocRef = doc(db, "users", userId);
       
-      // Real-time listener
       onSnapshot(userDocRef, (doc) => {
         if (doc.exists()) {
           userApps = doc.data().apps || [];
           renderApps(userApps);
         } else {
-          // Create new user document if doesn't exist
           setDoc(userDocRef, { apps: [] });
         }
       });
@@ -731,7 +805,6 @@
         appCard.addEventListener('click', () => openAppModal(app));
         appGrid.appendChild(appCard);
         
-        // Add edit/delete handlers
         appCard.querySelector('.edit-btn').addEventListener('click', (e) => {
           e.stopPropagation();
           openEditModal(app);
@@ -753,10 +826,20 @@
       detailCreated.textContent = app.created || new Date().toLocaleDateString();
       detailTech.textContent = app.tech || 'Not specified';
       
+      appPreview.style.display = 'none';
+      currentEditingApp = app;
+
       launchBtn.onclick = () => {
         if (app.url) {
           window.open(app.url, app.url.startsWith('http') ? '_blank' : '_self');
+        } else if (app.code) {
+          runCode(app.code);
         }
+      };
+      
+      editCodeBtn.onclick = () => {
+        codeEditor.setValue(app.code || '');
+        codeModal.classList.add('active');
       };
       
       appModal.classList.add('active');
@@ -767,7 +850,6 @@
       currentEditingApp = app;
       
       if (app) {
-        // Edit mode
         document.getElementById('editModalTitle').textContent = 'Edit App';
         appNameInput.value = app.name;
         appIconInput.value = app.icon || '';
@@ -777,7 +859,6 @@
         appTechInput.value = app.tech || '';
         deleteAppBtn.style.display = 'block';
       } else {
-        // Add mode
         document.getElementById('editModalTitle').textContent = 'Add New App';
         appNameInput.value = '';
         appIconInput.value = '📱';
@@ -803,7 +884,8 @@
         description: appDescInput.value.trim(),
         url: appUrlInput.value.trim(),
         tech: appTechInput.value.trim(),
-        created: currentEditingApp?.created || new Date().toLocaleDateString()
+        created: currentEditingApp?.created || new Date().toLocaleDateString(),
+        code: currentEditingApp?.code || ''
       };
       
       if (!appData.name) {
@@ -815,13 +897,11 @@
         const userDocRef = doc(db, "users", currentUser.uid);
         
         if (currentEditingApp) {
-          // Update existing app
           const updatedApps = userApps.map(app => 
             app.id === currentEditingApp.id ? appData : app
           );
           await setDoc(userDocRef, { apps: updatedApps }, { merge: true });
         } else {
-          // Add new app
           await setDoc(userDocRef, { 
             apps: arrayUnion(appData) 
           }, { merge: true });
@@ -832,6 +912,35 @@
         console.error("Error saving app:", error);
         alert('Failed to save app');
       }
+    }
+
+    // Save Code
+    async function saveCode() {
+      if (!currentUser || !currentEditingApp) return;
+      
+      const code = codeEditor.getValue();
+      
+      try {
+        const userDocRef = doc(db, "users", currentUser.uid);
+        const updatedApps = userApps.map(app => 
+          app.id === currentEditingApp.id ? { ...app, code } : app
+        );
+        await setDoc(userDocRef, { apps: updatedApps }, { merge: true });
+        codeModal.classList.remove('active');
+      } catch (error) {
+        console.error("Error saving code:", error);
+        alert('Failed to save code');
+      }
+    }
+
+    // Run Code
+    function runCode(code) {
+      appPreview.style.display = 'block';
+      const blob = new Blob([code], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      appIframe.src = url;
+      
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     // Delete App
@@ -854,19 +963,19 @@
 
     // Setup Event Listeners
     function setupEventListeners() {
-      // Theme toggle
       themeToggle.addEventListener('click', toggleTheme);
       
-      // Close modals
-      closeModal.addEventListener('click', () => appModal.classList.remove('active'));
+      closeModal.addEventListener('click', () => {
+        appModal.classList.remove('active');
+        appPreview.style.display = 'none';
+      });
       closeEditModal.addEventListener('click', () => editModal.classList.remove('active'));
+      closeCodeModal.addEventListener('click', () => codeModal.classList.remove('active'));
       
-      // Search functionality
       searchInput.addEventListener('input', (e) => {
         renderApps(userApps, e.target.value);
       });
       
-      // Navigation
       navBtns.forEach(btn => {
         btn.addEventListener('click', () => {
           navBtns.forEach(b => b.classList.remove('active'));
@@ -878,10 +987,10 @@
         });
       });
       
-      // Save app
       saveAppBtn.addEventListener('click', saveApp);
+      saveCodeBtn.addEventListener('click', saveCode);
+      runCodeBtn.addEventListener('click', () => runCode(codeEditor.getValue()));
       
-      // Delete app
       deleteAppBtn.addEventListener('click', () => {
         if (currentEditingApp) {
           deleteApp(currentEditingApp.id);
@@ -889,7 +998,6 @@
         }
       });
       
-      // Add app button
       addAppBtn.addEventListener('click', () => {
         openEditModal();
       });
