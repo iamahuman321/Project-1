@@ -476,6 +476,9 @@
         <span>Launch App</span>
         <span>🚀</span>
       </button>
+      <button class="btn btn-outline" id="codeEditorBtn" style="margin-top: 12px; width: 100%;">
+        Open Code Editor
+      </button>
     </div>
   </div>
 
@@ -599,6 +602,7 @@
     const detailCreated = document.getElementById('detailCreated');
     const detailTech = document.getElementById('detailTech');
     const launchBtn = document.getElementById('launchBtn');
+    const codeEditorBtn = document.getElementById('codeEditorBtn');
     
     const editModal = document.getElementById('editModal');
     const closeEditModal = document.getElementById('closeEditModal');
@@ -619,6 +623,7 @@
     let userApps = [];
     let darkMode = false;
     let currentEditingApp = null;
+    let currentViewingApp = null;
 
     // Initialize
     initTheme();
@@ -746,6 +751,7 @@
 
     // Open App Modal
     function openAppModal(app) {
+      currentViewingApp = app;
       modalIcon.textContent = app.icon || '📱';
       modalTitle.textContent = app.name;
       modalDescription.textContent = app.description || 'No description available';
@@ -757,6 +763,12 @@
         if (app.url) {
           window.open(app.url, app.url.startsWith('http') ? '_blank' : '_self');
         }
+      };
+      
+      // Set up code editor button
+      codeEditorBtn.onclick = () => {
+        // Navigate to editor page with app ID
+        window.location.href = `editor.html?appId=${app.id}`;
       };
       
       appModal.classList.add('active');
@@ -803,7 +815,13 @@
         description: appDescInput.value.trim(),
         url: appUrlInput.value.trim(),
         tech: appTechInput.value.trim(),
-        created: currentEditingApp?.created || new Date().toLocaleDateString()
+        created: currentEditingApp?.created || new Date().toLocaleDateString(),
+        code: currentEditingApp?.code || {
+          html: '<!-- Your HTML here -->\n<div id="app">\n  <h1>Hello World!</h1>\n</div>',
+          css: '/* Your CSS here */\nbody {\n  font-family: Arial, sans-serif;\n  margin: 0;\n  padding: 20px;\n}',
+          js: '// Your JavaScript here\ndocument.getElementById("app").style.color = "blue";',
+          files: []
+        }
       };
       
       if (!appData.name) {
